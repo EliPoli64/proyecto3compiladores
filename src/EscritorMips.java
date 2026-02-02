@@ -15,6 +15,8 @@ public class EscritorMips {
     private int stringCounter = 1;
     private int currentStackOffset = 0; // Para manejar offsets en la pila
     private List<String> todasLasStrings = new ArrayList<>();
+    private Map<String, String> tiposDeFunciones = new HashMap<>();
+    private String ultimaFuncionLlamada = "";
     
     public void procesar(String entrada, String salida) throws IOException {
         List<String> lineas = Files.readAllLines(Paths.get(entrada));
@@ -468,6 +470,7 @@ public class EscritorMips {
         String nombreFuncion = linea.replace("CALL", "").trim();
 
         out.println("    # CALL " + nombreFuncion);
+        ultimaFuncionLlamada = nombreFuncion;
 
         for (int i = 0; i < argumentosPendientes.size(); i++) {
             String arg = argumentosPendientes.get(i);
@@ -516,58 +519,22 @@ public class EscritorMips {
     }
 
     private void procesarReturn(List<String> tokens) {
-        if (tokens.size() > 1 && tokens.get(1).equals("NAVIDAD")) {
-            return;
-        }
+        if (tokens.size() > 1 && tokens.get(1).equals("NAVIDAD")) return;
 
-        if (!funcionActual.equals("navidad")) { 
-            // Para funciones normales
+        if (!funcionActual.equals("navidad")) {
             if (tokens.size() > 1) {
                 String valor = tokens.get(1);
-                
-                // Determinar el tipo de retorno basado en el mapa de variables
-                String tipoRetorno = determinarTipoRetorno(valor);
-                
-                // Cargar en el registro apropiado según el tipo
-                if (tipoRetorno != null) {
-                    switch (tipoRetorno.toLowerCase()) {
-                        case "float":
-                            // Para floats, usar $f0
-                            cargarRegistro("$f0", valor);
-                            break;
-                        case "int":
-                        case "bool":
-                        case "char":
-                            // Para enteros y booleanos, usar $v0
-                            cargarRegistro("$v0", valor);
-                            break;
-                        case "string":
-                            // Para strings, usar $v0 para la dirección
-                            cargarRegistro("$v0", valor);
-                            break;
-                        default:
-                            // Por defecto, usar $v0
-                            cargarRegistro("$v0", valor);
-                            break;
-                    }
+                String tipoRetorno = tiposDeFunciones.getOrDefault(funcionActual, "INT");
+
+                if (tipoRetorno.equals("FLOAT")) {
+                    cargarRegistro("$f0", valor);
+                    out.println("    # Retornando FLOAT en $f0");
                 } else {
-                    // Si no sabemos el tipo, usar $v0 por defecto
                     cargarRegistro("$v0", valor);
-                }
-            } else {
-                // Return sin valor
-                out.println("    # Return sin valor");
-            }
-            
-            out.println("    jr $ra");  // Retornar al llamante
-        } else {
-            // En navidad, no hacemos jr $ra (termina el programa)
-            if (tokens.size() > 1) {
-                String valor = tokens.get(1);
-                if (!valor.equals("NAVIDAD")) {
-                    cargarRegistro("$v0", valor);
+                    out.println("    # Retornando " + tipoRetorno + " en $v0");
                 }
             }
+            out.println("    jr $ra");
         }
     }
 
@@ -604,8 +571,6 @@ public class EscritorMips {
         
         // 6. Buscar en el mapa de variables
         if (stackOffsetMap.containsKey(valor)) {
-            // El tipo podría estar en un mapa de tipos si lo tienes
-            // Por ahora, usar heurísticas basadas en el nombre
             return determinarTipoPorNombreVariable(valor);
         }
         
@@ -725,7 +690,17 @@ public class EscritorMips {
 
             out.println("\n    # " + l);
             if (l.startsWith("# FUNCION ")) {
-                funcionActual = l.replace("# FUNCION ", "").trim();
+                String contenido = l.replace("# FUNCION ", "").trim();
+                if (contenido.contains("->")) {
+                    String[] partes = contenido.split(" -> ");
+                    if (partes.length == 1) continue;
+                    funcionActual = partes[0].trim();
+                    String tipo = partes[1].trim().toUpperCase();
+                    tiposDeFunciones.put(funcionActual, tipo);
+                } else {
+                    funcionActual = contenido;
+                    tiposDeFunciones.put(funcionActual, "INT"); // Por defecto
+                }
                 continue;
             }
 
@@ -776,7 +751,6 @@ public class EscritorMips {
             if (l.startsWith("PRINT ")) {
                 procesarPrint(tokens);
             } else if (l.startsWith("PARAM ") && tokens.size() < 3) {
-                System.out.println("Procesando PARAM: " + l);
                 String arg = tokens.get(1);
                 argumentosPendientes.add(arg);
                 continue;
@@ -822,26 +796,15 @@ public class EscritorMips {
     }
     private void procesarAsignacionRetorno(String linea, List<String> tokens) {
         String destino = tokens.get(0);
-        
-        out.println("    # Asignando valor de retorno a " + destino);
-        
-        // Asegurar que la variable destino tiene espacio en la pila
-        if (!stackOffsetMap.containsKey(destino)) {
-            asignarEspacioPila(destino);
-        }
-        
+        if (!stackOffsetMap.containsKey(destino)) asignarEspacioPila(destino);
         int offset = stackOffsetMap.get(destino);
-        
-        // Determinar el tipo de retorno basado en el contexto
-        String tipoRetorno = determinarTipoRetorno(funcionActual);
-        System.out.println("Tipo de retorno determinado para función '" + funcionActual + "': " + tipoRetorno);
-        
-        if (tipoRetorno != null && tipoRetorno.equals("float")) {
-            // Para floats, el retorno está en $f0
-            out.println("    swc1 $f0, " + offset + "($fp)");
+
+        String tipoRetorno = tiposDeFunciones.getOrDefault(ultimaFuncionLlamada, "INT");
+
+        if ("FLOAT".equals(tipoRetorno)) {
+            out.println("    swc1 $f0, " + offset + "($fp)  # Recuperar retorno FLOAT");
         } else {
-            // Para otros tipos, el retorno está en $v0
-            out.println("    sw $v0, " + offset + "($fp)");
+            out.println("    sw $v0, " + offset + "($fp)   # Recuperar retorno INT/BOOL");
         }
     }
     private void procesarRead(String linea) {

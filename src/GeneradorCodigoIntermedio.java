@@ -1125,9 +1125,6 @@ public class GeneradorCodigoIntermedio {
         
         // Buscar valor (derecha del =)
         // El valor puede ser una expresión compleja
-        if (nodo.getHijos().get(1).getTipo().equals("function_call")) {
-            System.out.println("Funcion " + nodo.getHijos().get(1).getLexema());
-        }
         valor = evaluarExpr(nodo.getHijos().get(1));
         
         if (!destino.isEmpty() && !valor.isEmpty()) {
