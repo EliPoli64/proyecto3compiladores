@@ -1,0 +1,269 @@
+str_1 = "Hola joven "
+str_2 = "!"
+str_3 = "Buenos días "
+str_4 = "Saludos distinguido "
+str_5 = "=== MENÚ DE OPCIONES ==="
+str_6 = "1. Calcular potencia"
+str_7 = "2. Saludar usuario"
+str_8 = "3. Mostrar contador"
+str_9 = "4. Operaciones matemáticas"
+str_10 = "5. Salir"
+str_11 = "========================"
+str_12 = "Opción inválida. Debe ser entre 1 y 5"
+str_13 = "Bienvenido al sistema de demostración"
+str_14 = ""
+str_15 = "Seleccione una opción: "
+str_16 = "=== CALCULAR POTENCIA ==="
+str_17 = "Ingrese la base (float): "
+str_18 = "Ingrese el exponente (int): "
+str_19 = "Resultado: "
+str_20 = "=== SALUDAR USUARIO ==="
+str_21 = "Ingrese su nombre: "
+str_22 = "Ingrese su edad: "
+str_23 = "=== CONTADOR ACTUAL ==="
+str_24 = "Contador: "
+str_25 = "El contador es PAR"
+str_26 = "El contador es IMPAR"
+str_27 = "=== OPERACIONES MATEMÁTICAS ==="
+str_28 = "Suma (15.5+3.2): "
+str_29 = "Resta (15.5-3.2): "
+str_30 = "Multiplicación (15.5*3.2): "
+str_31 = "División (15.5/3.2): "
+str_32 = "Cuadrado de 15.5: "
+str_33 = "=== FIN DEL PROGRAMA ==="
+str_34 = "Resultado final guardado: "
+str_35 = "¡Hasta luego!"
+str_36 = "Presione cualquier tecla para continuar..."
+str_37 = "Programa terminado correctamente"
+
+GLOBAL contador : int = 0
+GLOBAL resultado_final : float
+GLOBAL nombre_usuario : string
+GLOBAL mensaje_bienvenida : string
+GOTO navidad
+
+# FUNCION calcular_potencia -> float
+calcular_potencia:
+   PARAM base: float
+   PARAM exponente: int
+   t0_f = 1.0
+   resultado = t0_f
+   t1 = 0
+   i = t1
+   GOTO L3
+   L1:
+   t2_f = resultado * base
+   resultado = t2_f
+   t3 = i + 1
+   i = t3
+   t4 = i
+   L3:
+   t5 = i < exponente
+   t6 = t5
+   IF t6 GOTO L1
+   L2:
+   RETURN resultado
+
+# FUNCION saludar_usuario -> string
+saludar_usuario:
+   PARAM nombre: string
+   PARAM edad: int
+   LOCAL saludo : string
+   t7 = edad < 18
+   t8 = t7
+   IF NOT t8 GOTO L4
+   t9 = str_1 + nombre
+   t10 = t9 + str_2
+   saludo = t10
+   GOTO L5
+   t11 = edad >= 18
+   t12 = edad <= 60
+   t13 = t11 && t12
+   t14 = t13
+   IF NOT t14 GOTO L4
+   t15 = str_3 + nombre
+   t16 = t15 + str_2
+   saludo = t16
+   GOTO L5
+   L4:
+   t17 = str_4 + nombre
+   t18 = t17 + str_2
+   saludo = t18
+   GOTO L5
+   L5:
+   RETURN saludo
+
+# FUNCION mostrar_menu -> 
+mostrar_menu:
+   PRINTSTRING str_5
+   PRINTSTRING str_6
+   PRINTSTRING str_7
+   PRINTSTRING str_8
+   PRINTSTRING str_9
+   PRINTSTRING str_10
+   PRINTSTRING str_11
+   RETURN
+
+# FUNCION validar_opcion -> bool
+validar_opcion:
+   PARAM opcion: int
+   LOCAL valida : bool
+   t19 = opcion >= 1
+   t20 = opcion <= 5
+   t21 = t19 && t20
+   t22 = t21
+   IF NOT t22 GOTO L6
+   valida = true
+   GOTO L7
+   L6:
+   valida = false
+   PRINTSTRING str_12
+   GOTO L7
+   L7:
+   RETURN valida
+   
+# FUNCION PRINCIPAL (navidad)
+navidad:
+   t23 = 0
+   opcion = t23
+   t24 = true
+   ejecutando = t24
+   LOCAL numero1 : float
+   LOCAL numero2 : float
+   ARRAY array : int[4][3]
+   array[0][0] = 4
+   array[0][1] = 5
+   array[0][2] = 6
+   array[1][0] = 3
+   array[1][1] = 4
+   array[1][2] = 5
+   array[2][0] = 3
+   array[2][1] = 6
+   array[2][2] = 5
+   array[3][0] = 3
+   array[3][1] = 6
+   array[3][2] = 6
+   LOCAL nombre : string
+   LOCAL edad : int
+   mensaje_bienvenida = str_13
+   PRINTSTRING mensaje_bienvenida
+   PRINTSTRING str_14
+   L8:
+   CALL mostrar_menu
+   t25 = RET
+   PRINTSTRING str_15
+   READ opcion
+   t26 = true
+   hola = t26
+   t27 = opcion == 1
+   t28 = t27
+   IF NOT t28 GOTO L12
+   PRINTSTRING str_16
+   PRINTSTRING str_17
+   READ numero1
+   PRINTSTRING str_18
+   READ numero2
+   PARAM numero1, PARAM numero2
+   CALL calcular_potencia
+   t29 = RET
+   t30_f = t29
+   potencia_resultado = t30_f
+   PRINTSTRING str_19
+   PRINTFLOAT potencia_resultado
+   resultado_final = potencia_resultado
+   GOTO L11
+   L12:
+   t31 = opcion == 2
+   t32 = t31
+   IF NOT t32 GOTO L13
+   PRINTSTRING str_20
+   PRINTSTRING str_21
+   READ nombre
+   PRINTSTRING str_22
+   READ edad
+   nombre_usuario = nombre
+   PARAM nombre, PARAM edad
+   CALL saludar_usuario
+   t33 = RET
+   t34 = t33
+   saludo_personalizado = t34
+   PRINTSTRING saludo_personalizado
+   GOTO L11
+   L13:
+   t35 = opcion == 3
+   t36 = t35
+   IF NOT t36 GOTO L14
+   PRINTSTRING str_23
+   t37 = contador + 1
+   contador = t37
+   PRINTSTRING str_24
+   PRINT contador
+   t38 = contador % 2
+   t39 = t38 == 0
+   t40 = t39
+   IF NOT t40 GOTO L15
+   PRINTSTRING str_25
+   GOTO L16
+   L15:
+   PRINTSTRING str_26
+   GOTO L16
+   L16:
+   GOTO L11
+   L14:
+   t41 = opcion == 4
+   t42 = t41
+   IF NOT t42 GOTO L17
+   PRINTSTRING str_27
+   t43_f = 15.5
+   a = t43_f
+   t44_f = 3.2
+   b = t44_f
+   LOCAL c : float
+   t45_f = a + b
+   c = t45_f
+   PRINTSTRING str_28
+   PRINTFLOAT c
+   t46_f = a - b
+   c = t46_f
+   PRINTSTRING str_29
+   PRINTFLOAT c
+   t47_f = a * b
+   c = t47_f
+   PRINTSTRING str_30
+   PRINTFLOAT c
+   t48_f = a / b
+   c = t48_f
+   PRINTSTRING str_31
+   PRINTFLOAT c
+   PARAM a
+   PARAM 2
+   CALL calcular_potencia
+   t49 = RET
+   c = t49
+   PRINTSTRING str_32
+   PRINTFLOAT c
+   GOTO L11
+   L17:
+   t50 = opcion == 5
+   t51 = t50
+   IF NOT t51 GOTO L18
+   PRINTSTRING str_33
+   PRINTSTRING str_34
+   PRINTFLOAT resultado_final
+   PRINTSTRING str_35
+   ejecutando = false
+   GOTO L11
+   L18:
+   L11:
+   PRINTSTRING str_14
+   PRINTSTRING str_36
+   LOCAL continuar : char
+   READ continuar
+   t52 = NOT ejecutando
+   t53 = t52
+   IF t53 GOTO L_exit_when_10
+   GOTO L8
+   L_exit_when_10:
+   L9:
+   PRINTSTRING str_37
+   RETURN NAVIDAD
