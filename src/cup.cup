@@ -78,7 +78,6 @@ action code {:
                 NodoArbol idNode = nodo.getHijos().get(2);
                 if (idNode.getTipo().trim().equals("IDENTIFIER")) {
                     ambitoActualSemantico = idNode.getLexema().trim();
-                    System.out.println("Función detectada: " + ambitoActualSemantico);
                     tipoRetornoFuncionActual = obtenerTipoFuncion(ambitoActualSemantico);
                     validarTipoRetornoFuncion();
                 }

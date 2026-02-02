@@ -1,5 +1,4 @@
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Stack;
@@ -794,8 +793,7 @@ public class GeneradorCodigoIntermedio {
         String tipo = hijos.get(1).getLexema();  // INT, FLOAT, etc.
         String nombreArray = hijos.get(2).getLexema();
         NodoArbol dimensionesNodo = hijos.get(3);  // arrayDimensions
-        
-        // Obtener dimensiones CORREGIDO: para array[3][3]
+
         List<String> dimensiones = new ArrayList<>();
         obtenerDimensionesCorregido(dimensionesNodo, dimensiones);
         
@@ -970,13 +968,6 @@ public class GeneradorCodigoIntermedio {
         return null;
     }
 
-    // Verificar si es un valor literal
-    private boolean esValorLiteral(String tipo) {
-        return tipo.equals("int_literal") || tipo.equals("float_literal") || 
-            tipo.equals("bool_literal") || tipo.equals("char_literal") || 
-            tipo.equals("string_literal");
-    }
-
     
     private String procesarShow(NodoArbol nodo) {
         String expresion = "";
@@ -984,6 +975,18 @@ public class GeneradorCodigoIntermedio {
         
         // Buscar la expresión a mostrar
         for (NodoArbol hijo : nodo.getHijos()) {
+            if (hijo.getTipo().equals("array_access")){
+                for (NodoArbol hijoAccess: hijo.getHijos()) {
+                    if (hijoAccess.getTipo().equals("DECLBRACKETL")){
+                        expresion += "[";
+                    } else if (hijoAccess.getTipo().equals("DECLBRACKETR")){
+                        expresion += "]";
+                    } else {
+                        expresion += hijoAccess.getLexema();
+                    }
+                }
+                break;
+            }
             if (!hijo.getTipo().equals("SHOW") && 
                 !hijo.getTipo().equals("ENDL") &&
                 !hijo.getTipo().equals("LPAREN") &&
@@ -994,6 +997,7 @@ public class GeneradorCodigoIntermedio {
                 break;
             } 
         }
+        System.out.println(tipoExpresion);
         
         if (!expresion.isEmpty()) {
             if (tipoExpresion.equals("string") || expresion.startsWith("str_")) {
@@ -1326,7 +1330,15 @@ public class GeneradorCodigoIntermedio {
         
         for (NodoArbol hijo : nodo.getHijos()) {
             if (hijo.getTipo().equals("array_access")) {
-                arrayAccess = visitar(hijo);
+                for (NodoArbol hijoAccess: hijo.getHijos()) {
+                    if (hijoAccess.getTipo().equals("DECLBRACKETL")){
+                        arrayAccess += "[";
+                    } else if (hijoAccess.getTipo().equals("DECLBRACKETR")){
+                        arrayAccess += "]";
+                    } else {
+                        arrayAccess += hijoAccess.getLexema();
+                    }
+                }
             } else if (!hijo.getTipo().equals("ASSIGN")) {
                 valor = visitar(hijo);
             }

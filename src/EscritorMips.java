@@ -17,6 +17,7 @@ public class EscritorMips {
     private List<String> todasLasStrings = new ArrayList<>();
     private Map<String, String> tiposDeFunciones = new HashMap<>();
     private String ultimaFuncionLlamada = "";
+    private Map<String, Integer> arrayBaseOffsets = new HashMap<>();
     
     public void procesar(String entrada, String salida) throws IOException {
         List<String> lineas = Files.readAllLines(Paths.get(entrada));
@@ -87,6 +88,21 @@ public class EscritorMips {
             if (l.startsWith("LOCAL ")) {
                 continue;
             }
+            if (l.startsWith("ARRAY ")) {
+                String[] partes = l.split(":");
+                String nombre = partes[0].replace("ARRAY", "").trim();
+                
+                int filas = Integer.parseInt(linea.trim().split("\\[")[1].substring(0, 1));
+                int cols = Integer.parseInt(linea.trim().split("\\[")[2].substring(0, 1));
+                int tamElemento = l.contains("char") ? 1 : 4;
+                
+                // Guardamos donde empieza el arreglo relativo al $fp
+                arrayBaseOffsets.put(nombre, currentStackOffset);
+                currentStackOffset += (filas * cols * tamElemento);
+                
+                // Alinear a 4 bytes para mantener integridad de la pila
+                if (currentStackOffset % 4 != 0) currentStackOffset += (4 - (currentStackOffset % 4));
+            }
             
             List<String> tokens = dividirLineaConStrings(l);
             
@@ -94,7 +110,6 @@ public class EscritorMips {
             for (String token : tokens) {
                 if (esVariable(token) && !stackOffsetMap.containsKey(token) && !l.startsWith("LOCAL ")) {
                     // Asignar espacio en la pila para la variable
-                    System.out.println(linea);
                     stackOffsetMap.put(token, currentStackOffset);
                     currentStackOffset += 4; // 4 bytes por variable (palabra)
                 }
@@ -156,7 +171,40 @@ public class EscritorMips {
             }
         }
     }
+    private void procesarCargaArregloEnPila(String registro, String valor) {
+        String nombreArr = valor.substring(0, valor.indexOf("[")).trim();
+
+        String[] partes = valor.split("[\\[\\]]+");
+        int fila = Integer.parseInt(partes[1]);
+        int col = (partes.length > 2) ? Integer.parseInt(partes[2]) : 0;
+
+        int baseOffset = arrayBaseOffsets.getOrDefault(nombreArr, 0);
+        int numColumnas = 3; // Valor de ejemplo del prompt: char[3][3]
+        int tamElemento = 1; // 1 para char, 4 para int
+
+        int offsetRelativo = (fila * numColumnas + col) * tamElemento;
+        int offsetFinalEnPila = baseOffset + offsetRelativo;
+
+        out.println("    # Cargando " + valor + " desde la pila");
+        
+        // 4. Generar instrucción MIPS según el tipo
+        if (tamElemento == 1) {
+            // Para char (1 byte), usamos lb (load byte)
+            out.println("    lb " + registro + ", " + offsetFinalEnPila + "($fp)");
+        } else {
+            // Para int o float (4 bytes), usamos lw o lwc1
+            if (registro.startsWith("$f")) {
+                out.println("    lwc1 " + registro + ", " + offsetFinalEnPila + "($fp)");
+            } else {
+                out.println("    lw " + registro + ", " + offsetFinalEnPila + "($fp)");
+            }
+        }
+    }
     private void cargarRegistroPila(String registro, String valor) {
+        if (valor.contains("[") && valor.contains("]")) {
+            procesarCargaArregloEnPila(registro, valor);
+            return;
+        }
         if (esNumero(valor)) {
             // Si es un número, usar li
             out.println("    li " + registro + ", " + valor);
@@ -402,10 +450,15 @@ public class EscritorMips {
         }
 
         argumentosPendientes.clear();
-
-        out.println("    sw $ra, -4($fp)");
+        out.println("    addiu $sp, $sp, -8");
+        out.println("    sw $ra, 4($sp)");
+        out.println("    sw $fp, 0($sp)");
+        out.println("    move $fp, $sp");
         out.println("    jal " + nombreFuncion);
-        out.println("    lw $ra, -4($fp)");
+        out.println("    lw $fp, 0($sp)");
+        out.println("    lw $ra, 4($sp)");
+        out.println("    addiu $sp, $sp, 8");
+
     }
 
 
@@ -445,7 +498,6 @@ public class EscritorMips {
         if (tokens.size() > 1 && tokens.get(1).equals("NAVIDAD")) return;
 
         if (!funcionActual.equals("navidad")) {
-            System.out.println("    # RETURN en función " + funcionActual);
             if (tokens.size() > 1) {
                 String valor = tokens.get(1);
                 String tipoRetorno = tiposDeFunciones.getOrDefault(funcionActual, "INT");
@@ -454,6 +506,11 @@ public class EscritorMips {
                     cargarRegistro("$f0", valor);
                     out.println("    # Retornando FLOAT en $f0");
                 } else {
+                    if (valor.equals("true")){
+                        valor = "1";
+                    } else if (valor.equals("false")){
+                        valor = "0";
+                    }
                     cargarRegistro("$v0", valor);
                     out.println("    # Retornando " + tipoRetorno + " en $v0");
                 }
@@ -462,88 +519,6 @@ public class EscritorMips {
         }
     }
 
-    private String determinarTipoRetorno(String valor) {
-        if (valor == null || valor.isEmpty()) {
-            return null;
-        }
-        
-        // 1. Verificar si es un número float
-        if (valor.matches("-?\\d+\\.\\d+")) {
-            return "float";
-        }
-        
-        // 2. Verificar si es un número entero
-        if (valor.matches("-?\\d+")) {
-            return "int";
-        }
-        
-        // 3. Verificar si es un booleano
-        if (valor.equals("true") || valor.equals("false")) {
-            return "bool";
-        }
-        
-        // 4. Verificar si es un carácter
-        if (valor.startsWith("'") && valor.endsWith("'") && valor.length() == 3) {
-            return "char";
-        }
-        
-        // 5. Verificar si es una string literal
-        if ((valor.startsWith("\"") && valor.endsWith("\"")) ||
-            (valor.startsWith("'") && valor.endsWith("'"))) {
-            return "string";
-        }
-        
-        // 6. Buscar en el mapa de variables
-        if (stackOffsetMap.containsKey(valor)) {
-            return determinarTipoPorNombreVariable(valor);
-        }
-        
-        // 7. Verificar si es un temporal (empieza con t)
-        if (valor.startsWith("t") && valor.length() > 1 && 
-            Character.isDigit(valor.charAt(1))) {
-            // Podríamos rastrear tipos de temporales si los guardamos
-            return "int"; // Por defecto asumir int
-        }
-        
-        return null; // Tipo desconocido
-    }
-
-    private String determinarTipoPorNombreVariable(String nombreVariable) {
-        // Heurísticas para determinar tipo por nombre
-        String nombreLower = nombreVariable.toLowerCase();
-        
-        // Variables float
-        if (nombreLower.contains("float") || nombreLower.contains("_f") || 
-            nombreLower.contains("flt") || nombreLower.contains("pi") ||
-            nombreLower.contains("ratio") || nombreLower.contains("average") ||
-            nombreLower.contains("mean") || nombreLower.contains("temp")) {
-            return "float";
-        }
-        
-        // Variables bool
-        if (nombreLower.startsWith("is") || nombreLower.startsWith("has") ||
-            nombreLower.startsWith("can") || nombreLower.contains("flag") ||
-            nombreLower.contains("bool") || nombreLower.contains("valid") ||
-            nombreLower.contains("found") || nombreLower.contains("done")) {
-            return "bool";
-        }
-        
-        // Variables char
-        if (nombreLower.contains("char") || nombreLower.contains("ch") ||
-            nombreLower.length() == 1 || nombreLower.equals("c")) {
-            return "char";
-        }
-        
-        // Variables string
-        if (nombreLower.contains("str") || nombreLower.contains("msg") ||
-            nombreLower.contains("text") || nombreLower.contains("name") ||
-            nombreLower.contains("label") || nombreLower.startsWith("s_")) {
-            return "string";
-        }
-        
-        // Por defecto, asumir int
-        return "int";
-    }
     private void procesarDeclaracionLocal(String linea) {
         out.println("    # " + linea);
         
@@ -635,6 +610,7 @@ public class EscritorMips {
             }
             
             
+            
             if (l.startsWith("CALL ")) {
                 procesarCallInstruccion(l);
                 continue;
@@ -676,7 +652,9 @@ public class EscritorMips {
                 procesarPrint(tokens);
             } else if (l.startsWith("PARAM ") && tokens.size() < 3) {
                 String arg = tokens.get(1);
+                
                 argumentosPendientes.add(arg);
+                
                 continue;
             } else if (l.startsWith("PRINTFLOAT ")) {
                 procesarPrintFloat(tokens);
@@ -937,11 +915,14 @@ public class EscritorMips {
             } else if (esFuncion(destino)) {
                 // Llamada a función normal
                 out.println("    # Llamada a función: " + destino);
-                out.println("    addiu $sp, $sp, -4");
-                out.println("    sw $ra, 0($fp)");
+                out.println("    addiu $sp, $sp, -8");
+                out.println("    sw $ra, 4($sp)");
+                out.println("    sw $fp, 0($sp)");
+                out.println("    move $fp, $sp");
                 out.println("    jal " + destino);
-                out.println("    lw $ra, 0($fp)");
-                out.println("    addiu $sp, $sp, 4");
+                out.println("    lw $fp, 0($sp)");
+                out.println("    lw $ra, 4($sp)");
+                out.println("    addiu $sp, $sp, 8");
             } else if (destino.startsWith("L")) {
                 // Es una etiqueta de salto interno (no función)
                 out.println("    j " + destino);
@@ -1086,7 +1067,7 @@ public class EscritorMips {
             out.println("    lw $t0, " + offsetOrigen + "($fp)");
             out.println("    seq $t1, $t0, $zero"); // Esta es la clave: 0->1, 1->0
             out.println("    sw $t1, " + offsetDestino + "($fp)");
-        }else if (linea.contains(" >= ")) {
+        } else if (linea.contains(" >= ")) {
             String izquierda = tokens.get(2);
             String derecha = tokens.get(4);
             cargarRegistroPila("$t0", izquierda);
@@ -1215,6 +1196,21 @@ public class EscritorMips {
             out.println("    seq $t1, $t0, $zero");
             guardarEnPila(destino, "$t1");
             
+        } else if (linea.contains("[")) {
+            String nombreArr = linea.trim().split("\\[")[0]; // Extraer nombre
+            int fila = Integer.parseInt(linea.trim().split("\\[")[1].substring(0, 1));
+            int col = Integer.parseInt(linea.trim().split("\\[")[2].substring(0, 1));
+            int numCols = 3;
+
+            int baseOffset = arrayBaseOffsets.get(nombreArr);
+            int offsetElemento = (fila * numCols + col) * 1;
+
+            out.println("    # Asignación a arreglo en pila: " + destino);
+            out.println("    li $t0, " + (baseOffset + offsetElemento));
+            out.println("    addu $t0, $fp, $t0");
+
+            cargarRegistroPila("$t1", nombreArr + "[" + String.valueOf(fila) + "]" + "[" + String.valueOf(col) + "]");
+            out.println("    sb $t1, 0($t0)");
         } else if (tokens.size() == 3) {
             // Asignación simple
             String fuente = tokens.get(2);
