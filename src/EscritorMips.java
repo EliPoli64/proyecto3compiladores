@@ -253,15 +253,6 @@ public class EscritorMips {
         }
     }
 
-    
-
-    private boolean esVariableFloat(String nombreVariable) {
-        String tipo = tiposDeFunciones.get(nombreVariable);
-        if ("FLOAT".equals(tipo)) return true;
-
-        String nombreLower = nombreVariable.toLowerCase();
-        return nombreLower.endsWith("_f") || nombreLower.contains("float");
-    }
 
     private boolean esFloat(String token) {
         if (token == null || token.isEmpty()) return false;
@@ -1067,6 +1058,12 @@ public class EscritorMips {
             stackOffsetMap.put(destino, currentStackOffset);
             currentStackOffset += 4;
         }
+        String izq = tokens.size() > 2 ? tokens.get(2) : "";
+        String der = tokens.size() > 4 ? tokens.get(4) : "";
+
+        // Determinamos si la operación debe ser Float
+        boolean esOpFloat = esVariableFloat(izq) || esVariableFloat(der) || 
+                            esFloat(izq) || esFloat(der) || esVariableFloat(destino);
         
         if (linea.contains(" <= ")) {
             String izquierda = tokens.get(2);
@@ -1114,53 +1111,70 @@ public class EscritorMips {
             out.println("    jal modulo");
             guardarEnPila(destino, "$v0");
             
-        } else if (linea.contains(" / ")) {
-            String izquierda = tokens.get(2);
-            String derecha = tokens.get(4);
-            cargarRegistroPila("$a0", izquierda);
-            cargarRegistroPila("$a1", derecha);
-            out.println("    jal division");
-            guardarEnPila(destino, "$v0");
+        } if (linea.contains(" / ")) {
+            izq = tokens.get(2);
+            der = tokens.get(4);
             
-        } else if (linea.contains(" - ")) {
-            String izquierda = tokens.get(2);
-            String derecha = tokens.get(4);
-            cargarRegistroPila("$t0", izquierda);
-            cargarRegistroPila("$t1", derecha);
-            out.println("    sub $t2, $t0, $t1");
-            guardarEnPila(destino, "$t2");
-            
-        } else if (linea.contains(" * ")) {
-            String izq = tokens.size() > 2 ? tokens.get(2) : "";
-            String der = tokens.size() > 4 ? tokens.get(4) : "";
-            
-            // Detectar si la operación debe ser float
-            boolean esOperacionFloat = esFloat(izq) || esFloat(der) || 
-                izq.endsWith("_f") || der.endsWith("_f") || destino.endsWith("_f") ||
-                izq.equals("resultado") || destino.equals("resultado") || izq.equals("base");
-
-            if (esOperacionFloat) {
-                out.println("    # Multiplicación Floating Point");
+            if (esOperacionFloat(izq, der, destino)) {
+                out.println("    # División Floating Point");
                 cargarRegistro("$f0", izq);
                 cargarRegistro("$f1", der);
-                out.println("    mul.s $f2, $f0, $f1");
+                out.println("    div.s $f2, $f0, $f1");
                 guardarEnPila(destino, "$f2");
             } else {
-                out.println("    # Multiplicación Integer");
-                cargarRegistroPila("$a0", izq);
-                cargarRegistroPila("$a1", der);
-                out.println("    mult $a0, $a1");
+                out.println("    # División Integer");
+                cargarRegistro("$a0", izq);
+                cargarRegistro("$a1", der);
+                out.println("    div $a0, $a1");
                 out.println("    mflo $v0");
                 guardarEnPila(destino, "$v0");
             }
-        } else if (linea.contains(" + ")) {
-            String izquierda = tokens.get(2);
-            String derecha = tokens.get(4);
-            cargarRegistroPila("$t0", izquierda);
-            cargarRegistroPila("$t1", derecha);
-            out.println("    add $t2, $t0, $t1");
-            guardarEnPila(destino, "$t2");
+        }if (linea.contains(" + ") || linea.contains(" - ")) {
+            String operador = linea.contains(" + ") ? "+" : "-";
             
+            if (esOpFloat) {
+                out.println("    # Operación Floating Point (" + operador + ")");
+                cargarRegistro("$f0", izq); // lwc1 interno
+                cargarRegistro("$f1", der); // lwc1 interno
+                
+                if (operador.equals("+")) {
+                    out.println("    add.s $f2, $f0, $f1");
+                } else {
+                    out.println("    sub.s $f2, $f0, $f1");
+                }
+                guardarEnPila(destino, "$f2"); // swc1 interno
+            } else {
+                out.println("    # Operación Integer (" + operador + ")");
+                cargarRegistro("$t0", izq); // lw interno
+                cargarRegistro("$t1", der); // lw interno
+                
+                if (operador.equals("+")) {
+                    out.println("    add $t2, $t0, $t1");
+                } else {
+                    out.println("    sub $t2, $t0, $t1");
+                }
+                guardarEnPila(destino, "$t2"); // sw interno
+            }
+        } else if (linea.contains(" * ")) {
+            izq = tokens.get(2);
+            der = tokens.get(4);
+            
+            // Usar tu función existente para determinar el contexto de la operación
+            if (esOperacionFloat(izq, der, destino)) {
+                out.println("    # Multiplicación Floating Point");
+                cargarRegistro("$f0", izq); // Carga inteligentemente en float
+                cargarRegistro("$f1", der);
+                out.println("    mul.s $f2, $f0, $f1");
+                guardarEnPila(destino, "$f2"); // Guarda inteligentemente desde float
+            } else {
+                out.println("    # Multiplicación Integer");
+                // Usar cargarRegistro con registros temporales para consistencia
+                cargarRegistro("$t0", izq);
+                cargarRegistro("$t1", der);
+                out.println("    mult $t0, $t1");
+                out.println("    mflo $v0");
+                guardarEnPila(destino, "$v0");
+            }
         } else if (linea.contains(" < ")) {
             String izquierda = tokens.get(2);
             String derecha = tokens.get(4);
@@ -1220,7 +1234,18 @@ public class EscritorMips {
             }
         }
     }
-    
+    private boolean esOperacionFloat(String izq, String der, String destino) {
+        return esVariableFloat(izq) || esVariableFloat(der) || 
+            esVariableFloat(destino) || esFloat(izq) || esFloat(der);
+    }
+
+    private boolean esVariableFloat(String nombre) {
+        if (nombre == null) return false;
+        String n = nombre.toLowerCase();
+        // Añadimos comprobación explícita de sufijo _f y nombres del código intermedio
+        return n.endsWith("_f") || 
+               n.contains("float");
+    }
     
     
     private void guardarEnPila(String destino, String reg) {
