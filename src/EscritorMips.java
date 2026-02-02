@@ -84,13 +84,17 @@ public class EscritorMips {
         for (String linea : lineas) {
             String l = linea.trim();
             if (l.isEmpty() || l.endsWith(":")) continue;
+            if (l.startsWith("LOCAL ")) {
+                continue;
+            }
             
             List<String> tokens = dividirLineaConStrings(l);
             
             // Buscar variables en la línea
             for (String token : tokens) {
-                if (esVariable(token) && !stackOffsetMap.containsKey(token)) {
+                if (esVariable(token) && !stackOffsetMap.containsKey(token) && !l.startsWith("LOCAL ")) {
                     // Asignar espacio en la pila para la variable
+                    System.out.println(linea);
                     stackOffsetMap.put(token, currentStackOffset);
                     currentStackOffset += 4; // 4 bytes por variable (palabra)
                 }
@@ -152,7 +156,6 @@ public class EscritorMips {
             }
         }
     }
-    // Método principal para cargar registros (para uso en pila)
     private void cargarRegistroPila(String registro, String valor) {
         if (esNumero(valor)) {
             // Si es un número, usar li
@@ -175,6 +178,7 @@ public class EscritorMips {
         } else if (esVariable(valor)) {
             // Si es una variable en la pila
             if (!stackOffsetMap.containsKey(valor)) {
+                
                 // Variable nueva, asignar espacio en la pila
                 asignarEspacioPila(valor);
             }
@@ -232,104 +236,31 @@ public class EscritorMips {
         
         return false;
     }
-    private void cargarRegistro(String registro, String valor) {
-        if (valor == null || valor.isEmpty() || valor.equals("NAVIDAD")) {
-            return;
-        }
-        
-        // Si es una variable no declarada, declararla automáticamente
-        if (esVariable(valor) && !stackOffsetMap.containsKey(valor)) {
-            asignarEspacioPila(valor);
-            out.println("    # Variable '" + valor + "' creada automáticamente");
-        }
-        
-        // Determinar si es float
-        boolean esFloatValor = valor.endsWith("_f") || esFloat(valor) || 
-                            (stackOffsetMap.containsKey(valor) && esVariableFloat(valor));
-        
-        // Para registros de float
-        if (registro.startsWith("$f")) {
-            if (esFloatValor) {
-                if (valor.endsWith("_f")) {
-                    String valorSinSufijo = valor.substring(0, valor.length() - 2);
-                    out.println("    li.s " + registro + ", " + valorSinSufijo);
-                } else if (esFloat(valor)) {
-                    out.println("    li.s " + registro + ", " + valor);
-                } else if (stackOffsetMap.containsKey(valor)) {
-                    int offset = stackOffsetMap.get(valor);
-                    out.println("    lwc1 " + registro + ", " + offset + "($fp)");
-                } else if (valor.equals("true")) {
-                    out.println("    li.s " + registro + ", 1.0");
-                } else if (valor.equals("false")) {
-                    out.println("    li.s " + registro + ", 0.0");
-                } else if (esNumero(valor)) {
-                    // Convertir entero a float
-                    out.println("    li $t0, " + valor);
-                    out.println("    mtc1 $t0, " + registro);
-                    out.println("    cvt.s.w " + registro + ", " + registro);
-                }
+    private void cargarRegistro(String reg, String valor) {
+        if (reg.startsWith("$f")) { // Si el destino es un registro float
+            if (esFloat(valor)) {
+                out.println("    li.s " + reg + ", " + valor);
             } else {
-                // No es float, cargar como entero y convertir
-                cargarRegistro(registro.replace("$f", "$t"), valor);
-                out.println("    mtc1 " + registro.replace("$f", "$t") + ", " + registro);
-                out.println("    cvt.s.w " + registro + ", " + registro);
-            }
-        } 
-        // Para registros enteros
-        else {
-            if (esFloatValor) {
-                // Convertir float a entero
-                String tempFloatReg = "$f" + registro.substring(2);
-                if (valor.endsWith("_f")) {
-                    String valorSinSufijo = valor.substring(0, valor.length() - 2);
-                    out.println("    li.s " + tempFloatReg + ", " + valorSinSufijo);
-                } else if (stackOffsetMap.containsKey(valor)) {
-                    int offset = stackOffsetMap.get(valor);
-                    out.println("    lwc1 " + tempFloatReg + ", " + offset + "($fp)");
-                }
-                out.println("    cvt.w.s " + tempFloatReg + ", " + tempFloatReg);
-                out.println("    mfc1 " + registro + ", " + tempFloatReg);
-            } else if (valor.equals("true")) {
-                out.println("    li " + registro + ", 1");
-            } else if (valor.equals("false")) {
-                out.println("    li " + registro + ", 0");
-            } else if (esNumero(valor)) {
-                out.println("    li " + registro + ", " + valor);
-            } else if (esStringLiteral(valor)) {
-                String str = extraerStringDeLiteral(valor);
-                String label = obtenerLabelString(str);
-                out.println("    la " + registro + ", " + label);
-            } else if (stackOffsetMap.containsKey(valor)) {
                 int offset = stackOffsetMap.get(valor);
-                out.println("    lw " + registro + ", " + offset + "($fp)");
+                out.println("    lwc1 " + reg + ", " + offset + "($fp)  # Carga float directa");
+            }
+        } else { // Registro entero ($t0, $a0, etc)
+            if (stackOffsetMap.containsKey(valor)) {
+                out.println("    lw " + reg + ", " + stackOffsetMap.get(valor) + "($fp)");
             } else {
-                out.println("    # Valor no reconocido: " + valor);
+                out.println("    li " + reg + ", " + valor);
             }
         }
     }
 
+    
+
     private boolean esVariableFloat(String nombreVariable) {
-        // Estrategias para identificar variables float:
-        
-        // 1. Por convención de nombres
-        String[] floatSuffixes = {"_f", "_float", "Float", "flt"};
+        String tipo = tiposDeFunciones.get(nombreVariable);
+        if ("FLOAT".equals(tipo)) return true;
+
         String nombreLower = nombreVariable.toLowerCase();
-        
-        for (String suffix : floatSuffixes) {
-            if (nombreLower.endsWith(suffix)) {
-                return true;
-            }
-        }
-        
-        // 2. Por nombres comunes de variables float
-        String[] floatNames = {"pi", "e", "epsilon", "delta", "ratio", "average", "mean"};
-        for (String name : floatNames) {
-            if (nombreLower.contains(name)) {
-                return true;
-            }
-        }
-                
-        return false;
+        return nombreLower.endsWith("_f") || nombreLower.contains("float");
     }
 
     private boolean esFloat(String token) {
@@ -379,6 +310,7 @@ public class EscritorMips {
     }
     
     private void asignarEspacioPila(String variable) {
+        // System.out.println(variable);
         stackOffsetMap.put(variable, currentStackOffset);
         currentStackOffset += 4; // 4 bytes por variable
     }
@@ -522,6 +454,7 @@ public class EscritorMips {
         if (tokens.size() > 1 && tokens.get(1).equals("NAVIDAD")) return;
 
         if (!funcionActual.equals("navidad")) {
+            System.out.println("    # RETURN en función " + funcionActual);
             if (tokens.size() > 1) {
                 String valor = tokens.get(1);
                 String tipoRetorno = tiposDeFunciones.getOrDefault(funcionActual, "INT");
@@ -533,7 +466,7 @@ public class EscritorMips {
                     cargarRegistro("$v0", valor);
                     out.println("    # Retornando " + tipoRetorno + " en $v0");
                 }
-            }
+            } 
             out.println("    jr $ra");
         }
     }
@@ -669,7 +602,7 @@ public class EscritorMips {
                         tipo + ") asignada en offset " + offset + "($fp)");
             }
         } else {
-            out.println("    # Variable local '" + nombreVariable + "' ya está definida");
+            out.println("    # Variable local '" + nombreVariable + "' es local");
         }
     }
     
@@ -761,6 +694,9 @@ public class EscritorMips {
             } else if (l.startsWith("RETURN ")) {
                 // Manejar RETURN de funciones
                 procesarReturn(tokens);
+            } else if (l.startsWith("RETURN")) {
+                out.println("    # RETURN sin valor");
+                out.println("    jr $ra");
             } else if (l.startsWith("IF NOT ")) {
                 String[] partes = linea.trim().split("\\s+");
                 String var = partes[2];
@@ -796,7 +732,7 @@ public class EscritorMips {
     }
     private void procesarAsignacionRetorno(String linea, List<String> tokens) {
         String destino = tokens.get(0);
-        if (!stackOffsetMap.containsKey(destino)) asignarEspacioPila(destino);
+        // if (!stackOffsetMap.containsKey(destino)) asignarEspacioPila(destino);
         int offset = stackOffsetMap.get(destino);
 
         String tipoRetorno = tiposDeFunciones.getOrDefault(ultimaFuncionLlamada, "INT");
@@ -841,7 +777,7 @@ public class EscritorMips {
         out.println("    syscall");
         
         // Guardar en la variable (en la pila)
-        guardarEnPila(variable, "$v0", false);        
+        guardarEnPila(variable, "$v0");        
         // Nueva línea
         out.println("    la $a0, nl");
         out.println("    li $v0, 4");
@@ -854,7 +790,7 @@ public class EscritorMips {
         out.println("    syscall");
         
         // Guardar en la variable (float se guarda en $f0)
-        guardarEnPila(variable, "$f0", true);
+        guardarEnPila(variable, "$f0");
         
         
         // Nueva línea
@@ -900,7 +836,7 @@ public class EscritorMips {
         out.println("    syscall");
         
         // Guardar en la variable
-        guardarEnPila(variable, "$v0", false);
+        guardarEnPila(variable, "$v0");
         
         // Nueva línea
         out.println("    la $a0, nl");
@@ -919,7 +855,7 @@ public class EscritorMips {
         out.println("    xori $t1, $t0, 1");    // Invertir: 0→1, 1→0
         
         // Guardar en la variable
-        guardarEnPila(variable, "$t1", false);
+        guardarEnPila(variable, "$t1");
         
         // Nueva línea
         out.println("    la $a0, nl");
@@ -1139,7 +1075,7 @@ public class EscritorMips {
             cargarRegistroPila("$t1", derecha);
             out.println("    slt $t2, $t1, $t0");
             out.println("    xori $t2, $t2, 1");
-            guardarEnPila(destino, "$t2", false);
+            guardarEnPila(destino, "$t2");
             
         } else if (linea.contains(" = NOT ")) {
             String[] partes = linea.trim().split("\\s+");
@@ -1160,7 +1096,7 @@ public class EscritorMips {
             cargarRegistroPila("$t1", derecha);
             out.println("    slt $t2, $t0, $t1");
             out.println("    xori $t2, $t2, 1");
-            guardarEnPila(destino, "$t2", false);
+            guardarEnPila(destino, "$t2");
             
         } else if (linea.contains(" == ")) {
             String izquierda = tokens.get(2);
@@ -1168,7 +1104,7 @@ public class EscritorMips {
             cargarRegistroPila("$t0", izquierda);
             cargarRegistroPila("$t1", derecha);
             out.println("    seq $t2, $t0, $t1");
-            guardarEnPila(destino, "$t2", false);
+            guardarEnPila(destino, "$t2");
             
         } else if (linea.contains(" % ")) {
             String izquierda = tokens.get(2);
@@ -1176,7 +1112,7 @@ public class EscritorMips {
             cargarRegistroPila("$a0", izquierda);
             cargarRegistroPila("$a1", derecha);
             out.println("    jal modulo");
-            guardarEnPila(destino, "$v0", false);
+            guardarEnPila(destino, "$v0");
             
         } else if (linea.contains(" / ")) {
             String izquierda = tokens.get(2);
@@ -1184,7 +1120,7 @@ public class EscritorMips {
             cargarRegistroPila("$a0", izquierda);
             cargarRegistroPila("$a1", derecha);
             out.println("    jal division");
-            guardarEnPila(destino, "$v0", false);
+            guardarEnPila(destino, "$v0");
             
         } else if (linea.contains(" - ")) {
             String izquierda = tokens.get(2);
@@ -1192,24 +1128,38 @@ public class EscritorMips {
             cargarRegistroPila("$t0", izquierda);
             cargarRegistroPila("$t1", derecha);
             out.println("    sub $t2, $t0, $t1");
-            guardarEnPila(destino, "$t2", false);
+            guardarEnPila(destino, "$t2");
             
         } else if (linea.contains(" * ")) {
-            String izquierda = tokens.get(2);
-            String derecha = tokens.get(4);
-            cargarRegistroPila("$a0", izquierda);
-            cargarRegistroPila("$a1", derecha);
-            out.println("    mult $a0, $a1\n" + //
-                                "    mflo $v0");
-            guardarEnPila(destino, "$v0", false);
+            String izq = tokens.size() > 2 ? tokens.get(2) : "";
+            String der = tokens.size() > 4 ? tokens.get(4) : "";
             
+            // Detectar si la operación debe ser float
+            boolean esOperacionFloat = esFloat(izq) || esFloat(der) || 
+                izq.endsWith("_f") || der.endsWith("_f") || destino.endsWith("_f") ||
+                izq.equals("resultado") || destino.equals("resultado") || izq.equals("base");
+
+            if (esOperacionFloat) {
+                out.println("    # Multiplicación Floating Point");
+                cargarRegistro("$f0", izq);
+                cargarRegistro("$f1", der);
+                out.println("    mul.s $f2, $f0, $f1");
+                guardarEnPila(destino, "$f2");
+            } else {
+                out.println("    # Multiplicación Integer");
+                cargarRegistroPila("$a0", izq);
+                cargarRegistroPila("$a1", der);
+                out.println("    mult $a0, $a1");
+                out.println("    mflo $v0");
+                guardarEnPila(destino, "$v0");
+            }
         } else if (linea.contains(" + ")) {
             String izquierda = tokens.get(2);
             String derecha = tokens.get(4);
             cargarRegistroPila("$t0", izquierda);
             cargarRegistroPila("$t1", derecha);
             out.println("    add $t2, $t0, $t1");
-            guardarEnPila(destino, "$t2", false);
+            guardarEnPila(destino, "$t2");
             
         } else if (linea.contains(" < ")) {
             String izquierda = tokens.get(2);
@@ -1217,7 +1167,7 @@ public class EscritorMips {
             cargarRegistroPila("$t0", izquierda);
             cargarRegistroPila("$t1", derecha);
             out.println("    slt $t2, $t1, $t0");
-            guardarEnPila(destino, "$t2", false);
+            guardarEnPila(destino, "$t2");
             
         } else if (linea.contains(" > ")) {
             String izquierda = tokens.get(2);
@@ -1225,7 +1175,7 @@ public class EscritorMips {
             cargarRegistroPila("$t0", izquierda);
             cargarRegistroPila("$t1", derecha);
             out.println("    sgt $t2, $t1, $t0");
-            guardarEnPila(destino, "$t2", false);
+            guardarEnPila(destino, "$t2");
             
         } else if (linea.contains(" != ")) {
             String izquierda = tokens.get(2);
@@ -1234,7 +1184,7 @@ public class EscritorMips {
             cargarRegistroPila("$t1", derecha);
             out.println("    seq $t2, $t0, $t1");
             out.println("    xori $t2, $t2, 1");
-            guardarEnPila(destino, "$t2", false);
+            guardarEnPila(destino, "$t2");
             
         } else if (linea.contains(" == ")) {
             String izquierda = tokens.get(2);
@@ -1242,14 +1192,14 @@ public class EscritorMips {
             cargarRegistroPila("$t0", izquierda);
             cargarRegistroPila("$t1", derecha);
             out.println("    seq $t2, $t0, $t1");
-            guardarEnPila(destino, "$t2", false);
-            guardarEnPila(destino, "$t2", false);
+            guardarEnPila(destino, "$t2");
+            guardarEnPila(destino, "$t2");
             
         } else if (linea.contains(" NOT ")) {
             String fuente = tokens.get(3);
             cargarRegistroPila("$t0", fuente);
             out.println("    seq $t1, $t0, $zero");
-            guardarEnPila(destino, "$t1", false);
+            guardarEnPila(destino, "$t1");
             
         } else if (tokens.size() == 3) {
             // Asignación simple
@@ -1260,25 +1210,25 @@ public class EscritorMips {
                 String str = fuente.substring(1, fuente.length() - 1);
                 String label = stringMap.get(str);
                 out.println("    la $t0, " + label);
-                guardarEnPila(destino, "$t0", false);
+                guardarEnPila(destino, "$t0");
             } else if (esFloat(fuente)){
                 cargarRegistroPila("$f0", fuente);
-                guardarEnPila(destino, "$f0", true);
+                guardarEnPila(destino, "$f0");
             } else {
                 cargarRegistroPila("$t0", fuente); // BUSCAR MENSAJE BIENVENIDA
-                guardarEnPila(destino, "$t0", false);
+                guardarEnPila(destino, "$t0");
             }
         }
     }
     
     
     
-    private void guardarEnPila(String variable, String registro, boolean esFloat) {
-        int offset = stackOffsetMap.get(variable);
-        if (esFloat) {
-            out.println("    swc1 " + registro + ", " + offset + "($fp)");
+    private void guardarEnPila(String destino, String reg) {
+        int offset = stackOffsetMap.get(destino);
+        if (reg.startsWith("$f")) {
+            out.println("    swc1 " + reg + ", " + offset + "($fp) # Guarda float directo");
         } else {
-            out.println("    sw " + registro + ", " + offset + "($fp)");
+            out.println("    sw " + reg + ", " + offset + "($fp)");
         }
     }
     

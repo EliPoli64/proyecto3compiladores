@@ -72,12 +72,13 @@ action code {:
     private void manejarCambioAmbito(NodoArbol nodo, String tipoNodo) {
         if (tipoNodo.equals("navidad")) {
             ambitoActualSemantico = "navidad";
-            tipoRetornoFuncionActual = obtenerTipoFuncion(ambitoActualSemantico);
+            tipoRetornoFuncionActual = "coal";
         } else if (tipoNodo.equals("funcion")) {
             if (nodo.getHijos().size() > 2) {
                 NodoArbol idNode = nodo.getHijos().get(2);
                 if (idNode.getTipo().trim().equals("IDENTIFIER")) {
                     ambitoActualSemantico = idNode.getLexema().trim();
+                    System.out.println("Función detectada: " + ambitoActualSemantico);
                     tipoRetornoFuncionActual = obtenerTipoFuncion(ambitoActualSemantico);
                     validarTipoRetornoFuncion();
                 }
@@ -87,14 +88,14 @@ action code {:
                 NodoArbol idNode = nodo.getHijos().get(0);
                 if (idNode.getTipo().trim().equals("IDENTIFIER")) {
                     ambitoActualSemantico = idNode.getLexema().trim();
-                    tipoRetornoFuncionActual = "void";
+                    tipoRetornoFuncionActual = "coal";
                 }
             }
         }
     }
     
     private void validarTipoRetornoFuncion() {
-        String[] tiposValidos = {"void", "int", "float", "bool", "char"};
+        String[] tiposValidos = {"coal", "int", "float", "bool", "char"};
         boolean esValido = false;
         for (String tipo : tiposValidos) {
             if (tipo.equals(tipoRetornoFuncionActual)) {
@@ -103,7 +104,8 @@ action code {:
             }
         }
         if (!esValido) {
-            reportarErrorSemantico("El tipo de retorno de la función debe ser INT, FLOAT, BOOL, CHAR o VOID");
+            reportarErrorSemantico("El tipo de retorno de la función debe ser INT, FLOAT, BOOL, CHAR o COAL");
+            hayErroresSemanticos = true;
         }
     }
     
@@ -112,6 +114,7 @@ action code {:
             String nombre = nodo.getLexema().trim();
             if (!existeIdentificador(nombre)) {
                 reportarErrorSemantico("Identificador '" + nombre + "' no declarado en ámbito '" + ambitoActualSemantico + "'");
+                hayErroresSemanticos = true;
             }
         }
     }
@@ -153,6 +156,7 @@ action code {:
             String tipoArreglo = nodo.getHijos().get(1).getTipo();
             if (!tipoArreglo.equals("INT") && !tipoArreglo.equals("CHAR")) {
                 reportarErrorSemantico("El tipo del arreglo debe ser INT o CHAR");
+                hayErroresSemanticos = true;
             }
         }
     }
@@ -187,6 +191,7 @@ action code {:
             // Verificar que la variable exista
             if (tipoVariable.equals("error")) {
                 reportarErrorSemantico("Variable '" + nombreVariable + "' no declarada para pre-incremento");
+                hayErroresSemanticos = true;
                 return "error";
             }
             
@@ -195,6 +200,7 @@ action code {:
                 return tipoVariable;  // El tipo resultante es el mismo que la variable
             } else {
                 reportarErrorSemantico("El pre-incremento '++' solo puede aplicarse a variables de tipo int o float, no a '" + tipoVariable + "'");
+                hayErroresSemanticos = true;
                 return "error";
             }
         }
@@ -210,6 +216,7 @@ action code {:
             // Verificar que la variable exista
             if (tipoVariable.equals("error")) {
                 reportarErrorSemantico("Variable '" + nombreVariable + "' no declarada para pre-decremento");
+                hayErroresSemanticos = true;
                 return "error";
             }
             
@@ -218,6 +225,7 @@ action code {:
                 return tipoVariable;  // El tipo resultante es el mismo que la variable
             } else {
                 reportarErrorSemantico("El pre-decremento '--' solo puede aplicarse a variables de tipo int o float, no a '" + tipoVariable + "'");
+                hayErroresSemanticos = true;
                 return "error";
             }
         }
@@ -243,6 +251,7 @@ action code {:
                 return "error";
             } else {
                 reportarErrorSemantico("El operador '-' unario solo puede aplicarse a tipos int o float, no a '" + tipoHijo + "'");
+                hayErroresSemanticos = true;
                 return "error";
             }
         }
@@ -288,6 +297,7 @@ action code {:
                 }
             } else {
                 reportarErrorSemantico("El operador de potencia '^' solo puede aplicarse a tipos int o float, no a '" + tipoIzq + "' y '" + tipoDer + "'");
+                hayErroresSemanticos = true;
                 return "error";
             }
         }
@@ -297,6 +307,7 @@ action code {:
                 return "int";
             } else {
                 reportarErrorSemantico("El operador de división entera '//' solo puede aplicarse a tipos int, no a '" + tipoIzq + "' y '" + tipoDer + "'");
+                hayErroresSemanticos = true;
                 return "error";
             }
         }
@@ -306,6 +317,7 @@ action code {:
                 return "int";
             } else {
                 reportarErrorSemantico("El operador módulo '%' solo puede aplicarse a tipos int, no a '" + tipoIzq + "' y '" + tipoDer + "'");
+                hayErroresSemanticos = true;
                 return "error";
             }
         }
@@ -316,6 +328,7 @@ action code {:
                 return "float"; // resultado siempre float por si acaso
             } else {
                 reportarErrorSemantico("El operador de división flotante '/' solo puede aplicarse a tipos int o float, no a '" + tipoIzq + "' y '" + tipoDer + "'");
+                hayErroresSemanticos = true;
                 return "error";
             }
         }
@@ -331,6 +344,7 @@ action code {:
         }
         
         reportarErrorSemantico("Incompatibilidad de tipos en operación '" + operador + "': " + tipoIzq + " vs " + tipoDer);
+        hayErroresSemanticos = true;
         return "error";
     }
     
@@ -341,6 +355,7 @@ action code {:
         }
         
         reportarErrorSemantico("Incompatibilidad de tipos en operación '" + operador + "': " + tipoIzq + " vs " + tipoDer);
+        hayErroresSemanticos = true;
         return "error";
     }
     
@@ -386,6 +401,7 @@ action code {:
         
         if (!esCompatible) {
             reportarErrorSemantico(contexto + ": Se esperaba '" + tipoEsperado + "' pero se obtuvo '" + tipoObtenido + "'");
+            hayErroresSemanticos = true;
         }
     }
     
@@ -396,9 +412,10 @@ action code {:
             }
         }
         if (nombre.equals("navidad")) {
-            return "void";
+            return "coal";
         }
         reportarErrorSemantico("Función '" + nombre + "' no encontrada en tabla de símbolos");
+        hayErroresSemanticos = true;
         return "error";
     }
     
@@ -456,7 +473,7 @@ parser code {:
     }
     
     public boolean hayErrores() {
-        return hayErrores;
+        return hayErrores||action_obj.hayErroresSemanticos;
     }
     
     // Método para obtener errores semánticos (duplicados + otros)
@@ -515,7 +532,7 @@ terminal SEMI, COMMA, ASSIGN, PLUS, MINUS, TIMES, DIV_INT, DIV_FLOAT, MOD, POW, 
 terminal LT, LE, GT, GE, EQ, NE, AND, OR, NOT;
 terminal LPAREN, RPAREN, LBRACKET, RBRACKET, DECLBRACKETL, DECLBRACKETR, ENDL;
 
-terminal NAVIDAD, COAL, GIFT, WORLD, LOCAL, INT, FLOAT, BOOL, CHAR, STRING, VOID;
+terminal NAVIDAD, COAL, GIFT, WORLD, LOCAL, INT, FLOAT, BOOL, CHAR, STRING;
 terminal SHOW, GET, DECIDE, OF, ELSE, END, LOOP, EXIT, WHEN, FOR, RETURN, BREAK, TO, ARROW;
 
 terminal Integer INTEGER_LITERAL;
@@ -749,9 +766,9 @@ tipo ::= INT {:
                 result.setLexema("string");
                 RESULT = result; 
             :}
-       | VOID {: 
-                NodoArbol result = new NodoArbol("VOID");
-                result.setLexema("void");
+       | COAL {: 
+                NodoArbol result = new NodoArbol("COAL");
+                result.setLexema("coal");
                 RESULT = result; 
             :}
        ;

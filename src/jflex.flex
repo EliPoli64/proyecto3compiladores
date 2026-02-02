@@ -55,7 +55,7 @@ Identificador     = [a-zA-Z_][a-zA-Z0-9_]*
 <YYINITIAL> "bool"           { return symbol(sym.BOOL); }
 <YYINITIAL> "char"           { return symbol(sym.CHAR); }
 <YYINITIAL> "string"         { return symbol(sym.STRING); }
-<YYINITIAL> "void"           { return symbol(sym.VOID); }
+<YYINITIAL> "void"           { return symbol(sym.COAL); }
 <YYINITIAL> "show"           { return symbol(sym.SHOW); }
 <YYINITIAL> "get"            { return symbol(sym.GET); }
 
