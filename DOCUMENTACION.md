@@ -1,6 +1,6 @@
-# Documentación interna del Proyecto: Analizador Sintáctico
+# Documentación interna del Proyecto: Compilador a MIPS
 
-Este proyecto implementa un analizador sintáctico utilizando **JFlex** y **Java CUP**. El sistema lee un archivo fuente, identifica los tokens definidos en la especificación léxica, y genera un árbol de sintaxis y las tablas de símbolos por scope.
+Este proyecto implementa un compilador a MIPS utilizando **JFlex** y **Java CUP**. El sistema lee un archivo fuente, identifica los tokens definidos en la especificación léxica, genera un árbol de sintaxis y las tablas de símbolos por scope, genera código intermedio correspondiente al código fuente, y genera un programa en MIPS.
 
 ## Estructura del Proyecto
 
@@ -8,8 +8,6 @@ Este proyecto implementa un analizador sintáctico utilizando **JFlex** y **Java
 *   **`lib/`**: Librerías y herramientas necesarias (`jflex`, `cup`).
 *   **`bin/`**: Archivos de clase compilados (`.class`).
 *   **`base.c`**: Archivo de prueba con código ejemplo.
-*   **`arbol.txt`**: Archivo generado con el árbol de sintaxis.
-*   **`tablaSimbolos.txt`**: Archivo generado con las tablas de símbolos.
 
 ## Requisitos
 
@@ -38,9 +36,9 @@ mkdir bin
 
 javac -d bin -cp "lib/*" src/*.java
 # Si jar está en el path del sistema:
-jar cvfm proy2compiladores.jar manifest.txt -C bin .
+jar cvfm proy3compiladores.jar manifest.txt -C bin .
 # Si jar no está en el path del sistema, se puede usar esto en Windows:
-"C:\Program Files\Java\jdk-21\bin\jar.exe" cfm proy2compiladores.jar manifest.txt -C bin .
+"C:\Program Files\Java\jdk-21\bin\jar.exe" cfm proy3compiladores.jar manifest.txt -C bin .
 ```
 
 ## Instrucciones de Ejecución
@@ -61,7 +59,7 @@ java -jar proy1compiladores.jar base.c
 
 ## Salida y Resultados
 
-El analizador sintáctico genera tres archivos de salida:
+El analizador sintáctico genera cinco archivos de salida:
 
 ### 1. **`salida.txt`** - Secuencia de Tokens
 
@@ -143,17 +141,103 @@ NOMBRE          TIPO            ROL             AMBITO
 _s1_            string          Variable Global Global         
 ==========================
 ```
+### 4. **Un archivo en formato ".int"** - Código intermedio
+Este contiene instrucciones de código intermedio congruentes con la lógica del código fuente.
+
+**Ejemplo:**
+```
+str_1 = "Hola mundo"
+str_2 = "entra al if"
+str_3 = "!|"
+
+GLOBAL ii : int
+GLOBAL ff : float
+GLOBAL ss : string
+GLOBAL _s2_ : string
+GOTO navidad
+
+# FUNCION _mi_ -> float
+_mi_:
+   PARAM _dif_: int
+   PARAM _otra_param_: char
+   t0 = 0
+   _var_ = t0
+   t1 = str_1
+   _str_ = t1
+   t2 = 20
+   _i_ = t2
+```
+### 5. **Un archivo en formato ".asm"** - Código MIPS
+Este contiene el programa en ensamblador MIPS generado.
+
+**Ejemplo:**
+```
+.data
+    nl: .asciiz "\n"
+    true_str: .asciiz "true"
+    false_str: .asciiz "false"
+    str_1: .asciiz "Hola mundo"
+    str_2: .asciiz "entra al if"
+    str_3: .asciiz "!|"
+
+.text
+main:
+    addiu $sp, $sp, -260
+    move $fp, $sp
+    # Inicializar espacio de variables locales
+    move $t0, $fp
+    li $t1, 0
+
+    # str_1 = "Hola mundo"
+    la $t0, str_1
+    sw $t0, 0($fp)
+
+    # str_2 = "entra al if"
+    la $t0, str_2
+    sw $t0, 4($fp)
+
+    # str_3 = "!|"
+    la $t0, str_3
+    sw $t0, 8($fp)
+
+    # GOTO navidad
+    # Llamada a navidad
+    addiu $sp, $sp, -4
+    sw $ra, 264($fp)
+    jal navidad
+    lw $ra, 264($fp)
+    addiu $sp, $sp, 4
+
+    # # FUNCION _mi_ -> float
+
+    # _mi_:
+_mi_:
+
+    # PARAM _dif_: int
+
+    # PARAM _otra_param_: char
+
+    # t0 = 0
+    li $t0, 0
+    sw $t0, 52($fp)
+
+    # _var_ = t0
+    lw $t0, 52($fp)
+    sw $t0, 56($fp)
+
+```
 
 ## Ejemplo Completo
 
 Para analizar el archivo `base.c`:
 
 ```bash
-java -jar proy2compiladores.jar base.c
+java -jar proy3compiladores.jar base.c
 ```
 
 Esto generará:
 - **`salida.txt`**: Lista completa de tokens
 - **`arbol.txt`**: Árbol sintáctico del programa
 - **`tablaSimbolos.txt`**: Tablas de símbolos organizadas por scope
-
+- **`base.int`**: Código intermedio
+- **`base.asm`**: Código de MIPS
