@@ -997,7 +997,6 @@ public class GeneradorCodigoIntermedio {
                 break;
             } 
         }
-        System.out.println(tipoExpresion);
         
         if (!expresion.isEmpty()) {
             if (tipoExpresion.equals("string") || expresion.startsWith("str_")) {
